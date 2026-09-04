@@ -1,0 +1,7 @@
+This package interoperates with the Model Context Protocol and follows the
+tool-bridging conventions of @deepseek-ai/dsh-mcp-client, distributed under
+the MIT License by DeepSeek AI.
+
+Bytebase is a trademark of Bytebase. This package is not an official Bytebase
+distribution and communicates with Bytebase only through its published MCP
+and OAuth endpoints.

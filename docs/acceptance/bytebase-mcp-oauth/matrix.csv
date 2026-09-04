@@ -1,0 +1,10 @@
+case,round-1
+配置和URL约束,PASS
+Windows DPAPI 凭据原子往返,PASS
+OAuth 授权码与刷新持久化,PASS
+MCP 安全工具发现,PASS
+call_api operationId 白名单,PASS
+写操作接入 DSH approval,PASS
+Bytebase 在线发现端点,PASS
+真实 Bytebase OAuth 登录,NOT_RUN
+真实数据库变更发布,NOT_RUN

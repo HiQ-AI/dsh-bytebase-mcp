@@ -1,0 +1,6 @@
+- insert:
+    - id: bytebase-mcp
+      name: '@zzusp/dsh-bytebase-mcp'
+      config:
+        url: https://bytebase.hiqdat.dev/mcp
+        failOnStartupError: false
