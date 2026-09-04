@@ -23,7 +23,7 @@ npm run check
 当前源码目录可直接安装到本机 DSH Web profile：
 
 ```powershell
-dsh plugin --profile web add "D:\project\dsh-bytebase-mcp"
+dsh plugin --profile web add .
 ```
 
 安装会读取包内的 `cordis.patch.yml` 并加入插件配置。只检查最终配置、不安装时可运行：
