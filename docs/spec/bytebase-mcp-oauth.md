@@ -1,5 +1,7 @@
 # Bytebase MCP OAuth 插件实施规格
 
+> 本文是首版客户端白名单方案的实施快照。当前工具调用边界已由 [Bytebase MCP 透明调用边界变更](bytebase-mcp-pass-through.md) 取代。
+
 ## 目标
 
 在 DeepSeek Harness 中直接连接 Bytebase 官方 Streamable HTTP MCP，替代对 Bytebase Web 页面的 UI 自动化。插件运行于 Windows 11 / PowerShell 7 / Node.js 24 环境，默认连接 `https://bytebase.hiqdat.dev/mcp`。

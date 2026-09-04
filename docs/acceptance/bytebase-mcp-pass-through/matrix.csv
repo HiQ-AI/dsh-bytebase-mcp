@@ -1,0 +1,8 @@
+case,round-1
+服务端发布工具完整注册,PASS
+propose_database_change 与 call_api 透明转发,PASS
+无 approval 服务时不被插件拒绝,PASS
+OAuth 与凭据安全回归,PASS
+构建与打包,PASS
+真实 Bytebase MCP 工具发现,PASS
+真实数据库写入,NOT_RUN

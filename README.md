@@ -6,10 +6,9 @@
 
 - OAuth Token 与登录时的 MCP URL 绑定，并使用 Windows CurrentUser DPAPI 加密。
 - DSH 配置和日志中不出现 Access Token、Refresh Token、授权码或 PKCE verifier。
-- 默认不暴露无限制的 `call_api`：只有代码内固定的查询与发布 operationId 可以执行。
-- `propose_database_change` 必须经过 DSH approval，并拒绝 `createRollout=true`。
-- 创建 Rollout 和运行任务必须分别经过 DSH approval。
-- 插件不开放审批、拒绝、跳过、取消等 Bytebase API，Agent 不能替用户审批工单。
+- 插件注册 Bytebase MCP 服务端发布的全部工具，不维护第二份工具或 `call_api.operationId` 白名单，也不安装 DSH approval 门禁。
+- MCP 调用继承登录用户在 Bytebase 中的权限；可用操作由 Bytebase RBAC、工作区 MCP capability、SQL Review、工单审批流和服务端 MCP 方法策略决定。
+- MCP 操作以登录用户身份进入 Bytebase 审计日志。部署者必须在 Bytebase 侧配置最小权限，不能把本插件当作额外的授权隔离层。
 
 ## 安装前检查
 
@@ -93,11 +92,11 @@ node .\lib\bin.js logout
 
 登录成功后重启或热重载 DSH。访问令牌过期前，插件会在跨进程文件锁内调用 MCP SDK 刷新并原子回写；多个 DSH 进程共享同一凭据文件时不会并发重放旧 Refresh Token。Refresh Token 失效时，插件撤销工具并提示重新运行 `login`。
 
-## 当前允许的能力
+## 当前能力
 
-- Schema、只读查询、API 搜索和 Bytebase 内置技能说明。
-- 创建数据库变更工单，但不能同时创建 Rollout。
-- 读取工单、计划检查、Rollout 和 TaskRun 状态。
-- 经 DSH approval 后，为已批准计划创建 Rollout、运行指定任务。
+- 自动注册服务端发布的 Schema、查询、变更提案、API 搜索和 Bytebase 内置技能工具。
+- `propose_database_change` 的参数（包括 `createRollout`）原样发送给 Bytebase。
+- `call_api` 的 operationId 和请求体原样发送给 Bytebase，可覆盖建 Sheet、Plan、Issue、Rollout、运行 Task 等服务端允许的流程。
+- 插件不在客户端拦截审批、拒绝、跳过或取消等操作；Bytebase 服务端仍可依据 MCP 方法策略与当前用户权限拒绝调用。
 
-实现与验证边界见 [实施规格](docs/spec/bytebase-mcp-oauth.md) 和 [验收记录](docs/acceptance/bytebase-mcp-oauth/)。
+当前调用边界见 [透明调用变更规格](docs/spec/bytebase-mcp-pass-through.md)；OAuth 初版设计见 [实施规格快照](docs/spec/bytebase-mcp-oauth.md)，验证记录位于 `docs/acceptance/`。

@@ -16,7 +16,6 @@ import {
   startConnection,
   type ReconnectConfig,
 } from './connection.js'
-import { installToolPolicy } from './tools.js'
 import { callbackUrl, normalizeServerUrl } from './url.js'
 
 export const name = PLUGIN_NAME
@@ -67,7 +66,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     serverUrl: url,
     redirectUrl: state.redirectUrl ?? callbackUrl(),
   })
-  installToolPolicy(ctx, 'bytebase')
   const connection = startConnection(ctx, {
     url,
     toolCallTimeoutMs: config.toolCallTimeoutMs,
@@ -83,5 +81,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 export { OAuthCredentialStore } from './auth-store.js'
 export { WindowsDpapiProtector } from './dpapi.js'
 export { BytebaseOAuthProvider, InteractiveLoginRequiredError } from './oauth-provider.js'
-export { classifyToolCall, allowedOperationIds, publicToolName } from './tools.js'
+export { publicToolName } from './tools.js'
 export { normalizeServerUrl } from './url.js'
