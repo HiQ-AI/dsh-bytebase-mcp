@@ -1,0 +1,8 @@
+case,round-1
+最小剩余有效期触发刷新,PASS
+Refresh Token 未轮换时保留旧值,PASS
+到期前刷新并重建 MCP 会话,PASS
+重建后六个工具恢复,PASS
+全量类型检查测试构建打包,PASS
+真实凭据强制刷新与只读探针,PASS
+本地 Web profile 部署,PENDING

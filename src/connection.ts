@@ -4,7 +4,7 @@ import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/typ
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { BytebaseOAuthProvider } from './oauth-provider.js'
-import { InteractiveLoginRequiredError } from './oauth-provider.js'
+import { InteractiveLoginRequiredError, SESSION_TOKEN_REFRESH_SKEW_MS } from './oauth-provider.js'
 import { SERVER_NAME } from './constants.js'
 import { syncTools, type ToolDisposers } from './tools.js'
 
@@ -26,6 +26,7 @@ export interface ConnectionConfig {
   url: string
   toolCallTimeoutMs: number
   failOnStartupError: boolean
+  sessionRefreshSkewMs?: number
 }
 
 export interface ConnectionHandle {
@@ -61,9 +62,14 @@ export function startConnection(
   provider: BytebaseOAuthProvider,
   policy: ResolvedReconnectPolicy,
 ): ConnectionHandle {
+  const sessionRefreshSkewMs = config.sessionRefreshSkewMs ?? SESSION_TOKEN_REFRESH_SKEW_MS
+  if (!Number.isFinite(sessionRefreshSkewMs) || sessionRefreshSkewMs < 0) {
+    throw new Error('sessionRefreshSkewMs 必须是非负有限数')
+  }
   let disposed = false
   let client: Client | undefined
   let retryTimer: NodeJS.Timeout | undefined
+  let sessionRefreshTimer: NodeJS.Timeout | undefined
   let failedAttempts = 0
   let connectedAt: number | undefined
   let firstAttemptError: unknown
@@ -76,7 +82,13 @@ export function startConnection(
     disposers = new Map()
   }
 
+  const clearSessionRefreshTimer = (): void => {
+    if (sessionRefreshTimer !== undefined) clearTimeout(sessionRefreshTimer)
+    sessionRefreshTimer = undefined
+  }
+
   const scheduleReconnect = (error: unknown): void => {
+    clearSessionRefreshTimer()
     if (disposed) return
     if (loginRequired(error)) {
       clearTools()
@@ -104,7 +116,38 @@ export function startConnection(
     retryTimer.unref()
   }
 
+  const scheduleSessionRefresh = (
+    generation: Client,
+    markClosing: () => void,
+  ): void => {
+    clearSessionRefreshTimer()
+    const delay = provider.sessionRefreshDelayMs(sessionRefreshSkewMs)
+    if (delay === undefined) return
+    sessionRefreshTimer = setTimeout(() => {
+      sessionRefreshTimer = undefined
+      settling = (async () => {
+        try {
+          await provider.tokensWithMinimumValidity(sessionRefreshSkewMs)
+        } catch (error: unknown) {
+          ctx.logger.warn(`bytebase-mcp: token refresh failed; retrying in ${policy.initialDelayMs}ms: ${String(error)}`)
+          if (!disposed && client === generation) {
+            sessionRefreshTimer = setTimeout(() => scheduleSessionRefresh(generation, markClosing), policy.initialDelayMs)
+            sessionRefreshTimer.unref()
+          }
+          return
+        }
+        if (disposed || client !== generation) return
+        markClosing()
+        client = undefined
+        try { await generation.close() } catch {}
+        if (!disposed) await connectOnce(false)
+      })()
+    }, Math.max(1, delay))
+    sessionRefreshTimer.unref()
+  }
+
   const connectOnce = async (startup: boolean): Promise<void> => {
+    clearSessionRefreshTimer()
     const generation = new Client({ name: 'dsh-bytebase-mcp', version: '0.1.0' }, { capabilities: {} })
     const transport = new StreamableHTTPClientTransport(new URL(config.url), { authProvider: provider })
     let closing = false
@@ -142,6 +185,7 @@ export function startConnection(
       syncChain = run.catch(() => undefined)
       await run
       connectedAt = Date.now()
+      scheduleSessionRefresh(generation, () => { closing = true })
       if (failedAttempts > 0) ctx.logger.info('bytebase-mcp: reconnected and synchronized tools')
     } catch (error: unknown) {
       firstAttemptError ??= error
@@ -158,6 +202,7 @@ export function startConnection(
     async dispose() {
       disposed = true
       if (retryTimer !== undefined) clearTimeout(retryTimer)
+      clearSessionRefreshTimer()
       const current = client
       client = undefined
       if (current !== undefined) {

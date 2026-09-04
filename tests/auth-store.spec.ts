@@ -124,4 +124,26 @@ describe('OAuthCredentialStore', () => {
     expect(first?.tokens?.access_token).toBe('fresh-access')
     expect(second?.tokens?.access_token).toBe('fresh-access')
   })
+
+  it('refreshes before expiry for a requested validity window and retains an unrotated refresh token', async () => {
+    const { store } = await createStore()
+    const serverUrl = 'https://bytebase.example.com/mcp'
+    const redirectUrl = 'http://127.0.0.1:14801/callback'
+    await store.prepareLogin(serverUrl, redirectUrl)
+    await store.update(serverUrl, redirectUrl, current => ({
+      ...current,
+      clientInformation: { client_id: 'client-1' },
+      tokens: { access_token: 'access-1', refresh_token: 'refresh-1', token_type: 'Bearer' },
+      accessExpiresAt: new Date(Date.now() + 45_000).toISOString(),
+    }))
+
+    const refreshed = await store.refreshTokensIfNeeded(serverUrl, redirectUrl, async () => ({
+      access_token: 'access-2',
+      token_type: 'Bearer',
+      expires_in: 3600,
+    }), 60_000)
+
+    expect(refreshed?.tokens?.access_token).toBe('access-2')
+    expect(refreshed?.tokens?.refresh_token).toBe('refresh-1')
+  })
 })

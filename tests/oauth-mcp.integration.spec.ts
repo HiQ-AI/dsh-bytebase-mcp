@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import type { Context } from '@deepseek-ai/cordis'
 import { OAuthCredentialStore } from '../src/auth-store.js'
 import type { DataProtector } from '../src/dpapi.js'
+import { RECONNECT_DEFAULTS, startConnection } from '../src/connection.js'
 import { login } from '../src/login.js'
 import { BytebaseOAuthProvider } from '../src/oauth-provider.js'
 
@@ -39,6 +41,7 @@ async function startFixture() {
   let validAccessToken = 'access-1'
   let codeExchangeCount = 0
   let refreshCount = 0
+  let initializeCount = 0
   const tools = [
     'search_api',
     'get_skill',
@@ -124,6 +127,7 @@ async function startFixture() {
         return
       }
       if (message.method === 'initialize') {
+        initializeCount += 1
         json(response, 200, {
           jsonrpc: '2.0',
           id: message.id,
@@ -165,6 +169,7 @@ async function startFixture() {
     serverUrl: `${origin}/mcp`,
     get codeExchangeCount() { return codeExchangeCount },
     get refreshCount() { return refreshCount },
+    get initializeCount() { return initializeCount },
     requireRefreshedToken() { validAccessToken = 'access-2' },
   }
 }
@@ -213,5 +218,63 @@ describe('OAuth + MCP integration', () => {
     expect(fixture.refreshCount).toBe(1)
     expect((await store.read(fixture.serverUrl))?.tokens?.access_token).toBe('access-2')
     expect((await store.read(fixture.serverUrl))?.tokens?.refresh_token).toBe('refresh-2')
+  })
+
+  it('refreshes shared credentials and rebuilds the MCP session before token expiry', async () => {
+    const fixture = await startFixture()
+    const root = await mkdtemp(join(tmpdir(), 'dsh-bytebase-session-refresh-'))
+    roots.push(root)
+    const store = new OAuthCredentialStore(join(root, 'auth.json'), new FixtureProtector())
+    await login({
+      store,
+      serverUrl: fixture.serverUrl,
+      callbackPort: 14_900 + Math.floor(Math.random() * 500),
+      openAuthorization: async url => {
+        const response = await fetch(url, { redirect: 'follow' })
+        await response.body?.cancel()
+      },
+    })
+    const loginState = await store.read(fixture.serverUrl)
+    if (loginState === undefined) throw new Error('stored state missing after login')
+    await store.update(fixture.serverUrl, loginState.redirectUrl, current => ({
+      ...current,
+      accessExpiresAt: new Date(Date.now() + 31_000).toISOString(),
+    }))
+    const state = await store.read(fixture.serverUrl)
+    if (state === undefined) throw new Error('stored state missing')
+    const provider = await BytebaseOAuthProvider.create({
+      store,
+      serverUrl: fixture.serverUrl,
+      redirectUrl: state.redirectUrl,
+    })
+    const registered = new Set<string>()
+    const ctx = {
+      logger: { info() {}, warn() {}, error() {} },
+      tools: {
+        register(definition: { name: string }) {
+          registered.add(definition.name)
+          return () => { registered.delete(definition.name) }
+        },
+      },
+    } as unknown as Context
+    const connection = startConnection(ctx, {
+      url: fixture.serverUrl,
+      toolCallTimeoutMs: 5_000,
+      failOnStartupError: true,
+      sessionRefreshSkewMs: 30_500,
+    }, provider, RECONNECT_DEFAULTS)
+    try {
+      expect(await connection.ready).toEqual({})
+      expect(fixture.refreshCount).toBe(0)
+      expect(fixture.initializeCount).toBe(2)
+      fixture.requireRefreshedToken()
+
+      await expect.poll(() => fixture.refreshCount, { timeout: 5_000 }).toBe(1)
+      await expect.poll(() => fixture.initializeCount, { timeout: 5_000 }).toBe(3)
+      expect(registered.size).toBe(6)
+      expect((await store.read(fixture.serverUrl))?.tokens?.access_token).toBe('access-2')
+    } finally {
+      await connection.dispose()
+    }
   })
 })
