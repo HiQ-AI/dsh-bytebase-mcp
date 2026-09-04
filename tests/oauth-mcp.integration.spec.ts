@@ -20,7 +20,7 @@ const roots: string[] = []
 const closers: Array<() => Promise<void>> = []
 afterEach(async () => {
   for (const close of closers.splice(0)) await close()
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 async function body(request: IncomingMessage): Promise<string> {

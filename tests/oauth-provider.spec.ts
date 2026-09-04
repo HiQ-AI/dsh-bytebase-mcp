@@ -13,7 +13,7 @@ class FixtureProtector implements DataProtector {
 
 const roots: string[] = []
 afterEach(async () => {
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 })
 
 async function fixture() {
