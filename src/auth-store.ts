@@ -125,7 +125,11 @@ export class OAuthCredentialStore {
     serverUrl: string,
     redirectUrl: string,
     refresher: (current: StoredOAuthState) => Promise<OAuthTokens>,
+    minimumValidityMs = 30_000,
   ): Promise<StoredOAuthState | undefined> {
+    if (!Number.isFinite(minimumValidityMs) || minimumValidityMs < 0) {
+      throw new Error('minimumValidityMs 必须是非负有限数')
+    }
     const normalized = normalizeServerUrl(serverUrl)
     await mkdir(dirname(this.filename), { recursive: true, mode: 0o700 })
     return await withFileLock(this.filename, async () => {
@@ -134,12 +138,15 @@ export class OAuthCredentialStore {
       if (existing.serverUrl !== normalized || existing.redirectUrl !== redirectUrl) {
         throw new Error('OAuth 凭据与当前 Bytebase MCP 或回调地址不匹配；请重新 login')
       }
-      if (existing.tokens === undefined || existing.tokens.refresh_token === undefined || tokenIsFresh(existing)) {
+      if (existing.tokens === undefined || existing.tokens.refresh_token === undefined || tokenIsFresh(existing, minimumValidityMs)) {
         return cloneState(existing)
       }
       const tokens = await refresher(cloneState(existing))
       const next = cloneState(existing)
-      next.tokens = structuredClone(tokens)
+      next.tokens = {
+        ...structuredClone(tokens),
+        ...(tokens.refresh_token === undefined ? { refresh_token: existing.tokens.refresh_token } : {}),
+      }
       const expiresAt = tokenExpiry(tokens)
       if (expiresAt === undefined) delete next.accessExpiresAt
       else next.accessExpiresAt = expiresAt

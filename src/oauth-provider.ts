@@ -28,6 +28,7 @@ export interface BytebaseOAuthProviderOptions {
 }
 
 const OAUTH_REQUEST_TIMEOUT_MS = 30_000
+export const SESSION_TOKEN_REFRESH_SKEW_MS = 60_000
 
 async function oauthFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const timeout = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS)
@@ -100,6 +101,12 @@ export class BytebaseOAuthProvider implements OAuthClientProvider {
   }
 
   async tokens(): Promise<OAuthTokens | undefined> {
+    return await this.tokensWithMinimumValidity()
+  }
+
+  async tokensWithMinimumValidity(
+    minimumValidityMs = 30_000,
+  ): Promise<OAuthTokens | undefined> {
     try {
       const refreshed = await this.options.store.refreshTokensIfNeeded(
         this.options.serverUrl,
@@ -126,6 +133,7 @@ export class BytebaseOAuthProvider implements OAuthClientProvider {
             fetchFn: oauthFetch,
           })
         },
+        minimumValidityMs,
       )
       if (refreshed !== undefined) this.stateValue = refreshed
       return refreshed?.tokens === undefined ? undefined : withoutRefreshToken(refreshed.tokens)
@@ -136,6 +144,16 @@ export class BytebaseOAuthProvider implements OAuthClientProvider {
       }
       throw error
     }
+  }
+
+  sessionRefreshDelayMs(
+    minimumValidityMs = SESSION_TOKEN_REFRESH_SKEW_MS,
+    now = Date.now(),
+  ): number | undefined {
+    if (this.stateValue.accessExpiresAt === undefined) return undefined
+    const expiresAt = Date.parse(this.stateValue.accessExpiresAt)
+    if (!Number.isFinite(expiresAt)) return 0
+    return Math.max(0, expiresAt - now - minimumValidityMs)
   }
 
   async saveTokens(tokens: OAuthTokens): Promise<void> {

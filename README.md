@@ -90,7 +90,7 @@ node .\lib\bin.js logout
 | `failOnStartupError` | `false` | 首次连接失败是否阻止插件激活 |
 | `reconnect.*` | 见源码默认值 | 网络中断后的有限指数退避 |
 
-登录成功后重启或热重载 DSH。访问令牌过期前，插件会在跨进程文件锁内调用 MCP SDK 刷新并原子回写；多个 DSH 进程共享同一凭据文件时不会并发重放旧 Refresh Token。Refresh Token 失效时，插件撤销工具并提示重新运行 `login`。
+登录成功后重启或热重载 DSH。访问令牌过期前，插件会在跨进程文件锁内调用 MCP SDK 刷新并原子回写，同时主动重建 MCP 会话以加载新令牌；主会话和叶子会话共享同一 Runtime 连接与凭据，不分别认证。多个 DSH 进程共享同一凭据文件时不会并发重放旧 Refresh Token。Refresh Token 失效时，插件撤销工具并提示重新运行 `login`。
 
 ## 当前能力
 
