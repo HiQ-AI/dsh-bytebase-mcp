@@ -12,7 +12,7 @@
 
 ## 安装前检查
 
-要求 Windows 11、PowerShell 7、Node.js 24 和 DSH `0.1.1-rc.2` 系列运行时。
+要求 Windows 11、PowerShell 7、Node.js 24 和 DSH `0.2.1-alpha.2` 运行时（Cordis `4.0.5-alpha.1`）。
 
 ```powershell
 npm install
